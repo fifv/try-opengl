@@ -10,14 +10,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON) # Optional
 
 
 add_subdirectory(external/glfw)
+add_subdirectory(external/fmt)
 
 list(APPEND CMAKE_PREFIX_PATH external/glbinding/build/dist)
 find_package(glbinding REQUIRED)
 
 add_executable(try-opengl src/main.cpp)
-target_link_libraries(try-opengl PUBLIC glbinding::glbinding glfw)
+target_link_libraries(try-opengl PUBLIC glbinding::glbinding glfw fmt::fmt)
 target_precompile_headers(try-opengl PUBLIC
     <glbinding/gl/gl.h>
     <glbinding/glbinding.h>
-    <print>
+    # <print>
 )
