@@ -82,43 +82,86 @@ auto main() -> int {
 
 
     /**
+     * each attribute's elements seem should be same type, and number of elements should be 1,2,3,4
+     */
+    /**
      * opengl coordinates are from left-bottom to right-top
      */
-    struct VertexAttribute {
+    struct VertexAttributePosition {
         float x;
         float y;
     };
-    auto triangleBuffer = std::array<VertexAttribute, 6>{{
-        // {+0.0f, +0.5f},
-        // {-0.5f, -0.5f},
-        // {+0.5f, -0.5f},
-        {-0.5f, +0.5f},
-        {+0.5f, +0.5f},
-        {+0.5f, -0.5f},
-        {-0.5f, -0.5f},
-        {-0.5f, +0.5f},
-        {+0.5f, +0.5f},
-    }};
-
-    auto vertexArray = 0u;
-    gl::glGenVertexArrays(1, &vertexArray);
-    gl::glBindVertexArray(vertexArray);
-
-    auto buffer = 0u;
-    gl::glGenBuffers(1, &buffer);
-    gl::glBindBuffer(gl::GLenum::GL_ARRAY_BUFFER, buffer);
-    gl::glBufferData(gl::GLenum::GL_ARRAY_BUFFER, sizeof(triangleBuffer), &triangleBuffer, gl::GLenum::GL_DYNAMIC_DRAW);
+    struct VertexAttributeDummy {
+        int w;
+        int t;
+        int f;
+    };
     /**
-     *
+     * each vertex contains multiple attributes
      */
-    gl::glVertexAttribPointer(0, 2, gl::GLenum::GL_FLOAT, false, sizeof(VertexAttribute), 0);
-    gl::glEnableVertexArrayAttrib(vertexArray, 0);
+    struct VertexAttributes {
+        VertexAttributeDummy dummy_;
+        VertexAttributePosition position;
+    };
+
+    auto triangleBuffer = std::to_array<VertexAttributes>({
+        {{1, 2, 3}, {-0.5f, +0.5f}},
+        {{1, 2, 3}, {+0.5f, +0.5f}},
+        {{1, 2, 3}, {+0.5f, -0.5f}},
+        {{1, 2, 3}, {-0.5f, -0.5f}},
+        {{1, 2, 3}, {-0.5f, +0.5f}},
+        {{1, 2, 3}, {+0.5f, +0.5f}},
+    });
+
+    auto vertexArray = ([]() {
+        auto vertexArray = 0u;
+        gl::glGenVertexArrays(1, &vertexArray);
+        gl::glBindVertexArray(vertexArray);
+        return vertexArray;
+    })();
+
+    auto buffer = ([&]() {
+        auto buffer = 0u;
+        gl::glGenBuffers(1, &buffer);
+        /**
+         * GL_ARRAY_BUFFER etc. is a "binding target"
+         * there are limited number of "binding target"
+         * bind to one target won't affect other targets
+         * e.g. bina bufferA to GL_ARRAY_BUFFER and bufferB to GL_ELEMENT_ARRAY_BUFFER can happen at same time, and they are
+         * independent
+         */
+        gl::glBindBuffer(gl::GLenum::GL_ARRAY_BUFFER, buffer);
+        gl::glBufferData(gl::GLenum::GL_ARRAY_BUFFER, sizeof(triangleBuffer), &triangleBuffer, gl::GLenum::GL_DYNAMIC_DRAW);
+        /**
+         * the last param, `pointer`, is an offset, in Bytes, from the vertex attributes beginning to the data
+         * can be used to skip some paddings
+         */
+        gl::glVertexAttribPointer(
+            0, 2, gl::GLenum::GL_FLOAT, false, sizeof(VertexAttributes), (const void *)(offsetof(VertexAttributes, position))
+        );
+        gl::glEnableVertexArrayAttrib(vertexArray, 0);
+
+        return buffer;
+    })();
+
+
+    auto indexBuffer = ([]() {
+        auto indexBufferData = std::to_array({0u, 1u, 2u, 2u, 3u, 1u});
+        auto indexBuffer = 0u;
+        gl::glGenBuffers(1, &indexBuffer);
+        gl::glBindBuffer(gl::GLenum::GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl::glBufferData(
+            gl::GLenum::GL_ELEMENT_ARRAY_BUFFER, sizeof(indexBufferData), indexBufferData.data(), gl::GLenum::GL_DYNAMIC_DRAW
+        );
+        return indexBuffer;
+    })();
 
     const auto program = createProgram();
     gl::glUseProgram(program);
 
     while (!glfwWindowShouldClose(window)) {
         glClear(gl::GL_COLOR_BUFFER_BIT);
+
         static auto count = 0;
         count++;
         fmt::print("Frame x{}\r", count);
@@ -132,6 +175,8 @@ auto main() -> int {
          *
          */
         gl::glDrawArrays(gl::GLenum::GL_TRIANGLES, count % 6, 6);
+        /* works! */
+        // gl::glDrawElements(gl::GLenum::GL_TRIANGLES, 6, gl::GL_UNSIGNED_INT, 0);
 
 
         glfwSwapBuffers(window);
