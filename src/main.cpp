@@ -6,9 +6,27 @@
 
 #include <fmt/base.h>
 
-auto createProgram() -> uint32_t {
+
+
+auto createProgram(const std::string &vertexShaderSource, const std::string &fragmentShaderSource) -> uint32_t {
     const auto vertexShader = gl::glCreateShader(gl::GLenum::GL_VERTEX_SHADER);
     const auto fragmentShader = gl::glCreateShader(gl::GLenum::GL_FRAGMENT_SHADER);
+    const auto vertexShaderSourceC = vertexShaderSource.c_str();
+    const auto fragmentShaderSourceC = fragmentShaderSource.c_str();
+
+    gl::glShaderSource(vertexShader, 1, &vertexShaderSourceC, nullptr);
+    gl::glShaderSource(fragmentShader, 1, &fragmentShaderSourceC, nullptr);
+    gl::glCompileShader(vertexShader);
+    gl::glCompileShader(fragmentShader);
+
+    const auto program = gl::glCreateProgram();
+    gl::glAttachShader(program, vertexShader);
+    gl::glAttachShader(program, fragmentShader);
+    gl::glLinkProgram(program);
+
+    return program;
+}
+auto createTestProgram1() -> uint32_t {
     const auto vertexShaderSource = R"(
         #version 460 core
         layout(location = 0) in vec4 myPosition;
@@ -24,18 +42,27 @@ auto createProgram() -> uint32_t {
         }
     )";
 
-    gl::glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
-    gl::glShaderSource(fragmentShader, 1, &fragmentShaderSource, nullptr);
-    gl::glCompileShader(vertexShader);
-    gl::glCompileShader(fragmentShader);
-
-    const auto program = gl::glCreateProgram();
-    gl::glAttachShader(program, vertexShader);
-    gl::glAttachShader(program, fragmentShader);
-    gl::glLinkProgram(program);
-
-    return program;
+    return createProgram(vertexShaderSource, fragmentShaderSource);
 }
+auto createTestProgram2() -> uint32_t {
+    const auto vertexShaderSource = R"(
+        #version 460 core
+        layout(location = 0) in vec4 myPosition;
+        void main() {
+            gl_Position = myPosition;
+        }
+    )";
+    const auto fragmentShaderSource = R"(
+        #version 460 core
+        layout(location = 0) out vec4 myColor;
+        void main() {
+            myColor = vec4(0.3, 0.5, 0.0, 1.0);
+        }
+    )";
+
+    return createProgram(vertexShaderSource, fragmentShaderSource);
+}
+
 
 auto main() -> int {
     fmt::println("hi");
@@ -104,23 +131,29 @@ auto main() -> int {
         VertexAttributePosition position;
     };
 
-    auto triangleBuffer = std::to_array<VertexAttributes>({
-        {{1, 2, 3}, {-0.5f, +0.5f}},
-        {{1, 2, 3}, {+0.5f, +0.5f}},
-        {{1, 2, 3}, {+0.5f, -0.5f}},
-        {{1, 2, 3}, {-0.5f, -0.5f}},
-        {{1, 2, 3}, {-0.5f, +0.5f}},
-        {{1, 2, 3}, {+0.5f, +0.5f}},
-    });
-
+    /**
+     * VAO, the master, store all other obj's configurations
+     */
     auto vertexArray = ([]() {
         auto vertexArray = 0u;
         gl::glGenVertexArrays(1, &vertexArray);
-        gl::glBindVertexArray(vertexArray);
+        // gl::glBindVertexArray(vertexArray);
+        // gl::glBindVertexArray(0);
         return vertexArray;
     })();
 
-    auto buffer = ([&]() {
+    auto buffer = ([](uint32_t vertexArray) {
+        gl::glBindVertexArray(vertexArray);
+
+        auto triangleBuffer = std::to_array<VertexAttributes>({
+            {{1, 2, 3}, {-0.5f, +0.5f}},
+            {{1, 2, 3}, {+0.5f, +0.5f}},
+            {{1, 2, 3}, {+0.5f, -0.5f}},
+            {{1, 2, 3}, {-0.5f, -0.5f}},
+            {{1, 2, 3}, {-0.5f, +0.5f}},
+            {{1, 2, 3}, {+0.5f, +0.5f}},
+        });
+
         auto buffer = 0u;
         gl::glGenBuffers(1, &buffer);
         /**
@@ -141,11 +174,19 @@ auto main() -> int {
         );
         gl::glEnableVertexArrayAttrib(vertexArray, 0);
 
+        /**
+         * unbind GL_ARRAY_BUFFER, shows that it is stored in vao and later we only need bind vao
+         */
+        gl::glBindBuffer(gl::GLenum::GL_ARRAY_BUFFER, 0);
+        gl::glBindVertexArray(0);
+
         return buffer;
-    })();
+    })(vertexArray);
 
 
-    auto indexBuffer = ([]() {
+    auto indexBuffer = ([](uint32_t vertexArray) {
+        gl::glBindVertexArray(vertexArray);
+
         auto indexBufferData = std::to_array({0u, 1u, 2u, 2u, 3u, 1u});
         auto indexBuffer = 0u;
         gl::glGenBuffers(1, &indexBuffer);
@@ -153,18 +194,30 @@ auto main() -> int {
         gl::glBufferData(
             gl::GLenum::GL_ELEMENT_ARRAY_BUFFER, sizeof(indexBufferData), indexBufferData.data(), gl::GLenum::GL_DYNAMIC_DRAW
         );
-        return indexBuffer;
-    })();
+        /**
+         * unbind GL_ELEMENT_ARRAY_BUFFER, shows that it is stored in vao and later we only need bind vao
+         */
+        gl::glBindBuffer(gl::GLenum::GL_ELEMENT_ARRAY_BUFFER, 0);
+        gl::glBindVertexArray(0);
 
-    const auto program = createProgram();
-    gl::glUseProgram(program);
+        return indexBuffer;
+    })(vertexArray);
+
+    const auto program1 = createTestProgram1();
+    const auto program2 = createTestProgram2();
+    // gl::glUseProgram(program1);
 
     while (!glfwWindowShouldClose(window)) {
-        glClear(gl::GL_COLOR_BUFFER_BIT);
-
         static auto count = 0;
         count++;
         fmt::print("Frame x{}\r", count);
+
+        gl::glUseProgram((count / 1000) % 2 == 0 ? program1 : program2);
+        gl::glBindVertexArray(vertexArray);
+
+
+        glClear(gl::GL_COLOR_BUFFER_BIT);
+
 
         // gl::glDrawElements(gl::GLenum::GL_TRIANGLES, 1, GLenum type, const void *indices)
 

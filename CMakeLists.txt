@@ -22,3 +22,10 @@ target_precompile_headers(try-opengl PUBLIC
     <glbinding/glbinding.h>
     # <print>
 )
+
+# set(ENV{VULKAN_SDK} "D:/usr/VulkanSDK/1.4.341.1")
+# # list(APPEND CMAKE_PREFIX_PATH D:/usr/VulkanSDK/)
+# find_package(Vulkan REQUIRED)
+# # add_executable(example-vulkan src/example-vulkan.cpp)
+# # target_link_libraries(example-vulkan PUBLIC glfw Vulkan::Vulkan)
+
